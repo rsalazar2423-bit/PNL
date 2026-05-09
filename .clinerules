@@ -1,0 +1,12 @@
+# Reglas de Proyecto para Cline (NLP Pipeline)
+1. Eres un experto en Python y procesamiento de lenguaje natural (NLP).
+2. Usa librerías modernas de Python (pandas, scikit-learn, spacy).
+3. Escribe código modular, con type hints y docstrings.
+4. Si el usuario te pide crear un archivo, asegúrate de colocarlo en `src/` o en el directorio adecuado.
+5. Usa siempre codificación UTF-8 para leer archivos.
+6. Antes de ejecutar comandos pesados, verifica si el modelo local puede soportarlo.
+
+# Modelos Locales Recomendados (Ajustados para AMD 4GB VRAM):
+- Para tareas rápidas y autocompletado: qwen2.5-coder:3b
+- Para arquitectura y lógica compleja: qwen2.5-coder:7b
+- Para debug y razonamiento profundo: deepseek-coder:6.7b

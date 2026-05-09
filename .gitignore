@@ -1,0 +1,27 @@
+# Entorno Virtual
+.venv/
+env/
+venv/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Datos y Resultados (Caché local)
+pipeline_results.pkl
+nlp_export_*.csv
+emotions.db
+
+# Notebooks (opcional, si quieres mantener el repo limpio)
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
