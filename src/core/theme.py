@@ -15,6 +15,8 @@ Uso:
 """
 
 import plotly.graph_objects as go
+import gradio as gr
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -96,3 +98,35 @@ def apply_corporate_layout(fig: go.Figure, title: str) -> go.Figure:
         yaxis=dict(showgrid=True, gridcolor=CORP_GRID, zerolinecolor=CORP_GRID)
     )
     return fig
+
+
+# ─────────────────────────────────────────────────────────────
+# CONFIGURACIÓN GRADIO (UI)
+# ─────────────────────────────────────────────────────────────
+
+def get_gradio_theme():
+    """Retorna el tema Dark Premium para la interfaz Gradio."""
+    return gr.themes.Base(
+        primary_hue=gr.themes.colors.blue,
+        secondary_hue=gr.themes.colors.slate,
+        neutral_hue=gr.themes.colors.slate,
+        font=gr.themes.GoogleFont("Inter"),
+    ).set(
+        body_background_fill=CORP_BG,
+        body_text_color="#CBD5E1",
+        block_background_fill="#111827",
+        block_border_color="#1E293B",
+        block_label_text_color="#94A3B8",
+        block_title_text_color="#F8FAFC",
+        input_background_fill="#1E293B",
+        button_primary_background_fill="#2563EB",
+        button_secondary_background_fill="#1E293B",
+    )
+
+def get_dark_mode_js():
+    """Retorna el script JS para forzar el modo oscuro en el navegador."""
+    return """
+    function force_dark_mode() {
+        document.body.classList.add('dark');
+    }
+    """

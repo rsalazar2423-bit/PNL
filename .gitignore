@@ -11,9 +11,14 @@ __pycache__/
 .pytest_cache/
 
 # Datos y Resultados (Caché local)
-pipeline_results.pkl
-nlp_export_*.csv
+*.pkl
+*.db
+*.csv
+*.json
+pipeline_results*
+nlp_export_*
 emotions.db
+pipeline_results_data.pkl
 
 # Notebooks (opcional, si quieres mantener el repo limpio)
 .ipynb_checkpoints/
@@ -25,3 +30,4 @@ emotions.db
 # Sistema
 .DS_Store
 Thumbs.db
+*.log

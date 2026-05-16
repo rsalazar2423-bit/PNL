@@ -109,6 +109,43 @@ def create_3d_scatter(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def create_emotion_chart(df: pd.DataFrame) -> go.Figure:
+    """
+    Genera un gráfico de barras con la distribución de emociones detectadas.
+
+    Args:
+        df (pd.DataFrame): DataFrame con columna 'emotion'.
+
+    Returns:
+        go.Figure: Gráfico de barras horizontales estilizado.
+    """
+    print("   [SENT] Generando gráfico de emociones...")
+    counts = df['emotion'].value_counts()
+    
+    # Paleta de colores para emociones
+    emotion_colors = {
+        'others': '#94a3b8', 'joy': '#facc15', 'sadness': '#38bdf8',
+        'anger': '#ef4444', 'surprise': '#a78bfa', 'disgust': '#fb923c',
+        'fear': '#818cf8'
+    }
+    
+    fig = go.Figure(go.Bar(
+        x=counts.values,
+        y=counts.index,
+        orientation='h',
+        marker=dict(
+            color=[emotion_colors.get(k, '#94a3b8') for k in counts.index],
+            line=dict(color='white', width=1)
+        ),
+        text=counts.values,
+        textposition='auto'
+    ))
+    
+    fig = apply_corporate_layout(fig, "Distribución Granular de Emociones")
+    fig.update_layout(yaxis={'categoryorder': 'total ascending'})
+    return fig
+
+
 def generate_sentiment_charts(df: pd.DataFrame) -> dict:
     """
     Orquesta la generación de todos los gráficos de sentimiento.
@@ -131,6 +168,7 @@ def generate_sentiment_charts(df: pd.DataFrame) -> dict:
         'distribution_chart': create_distribution_pie(df),
         'bars_chart': create_bars_chart(df),
         'likes_sentiment_chart': create_3d_scatter(df),
+        'emotion_chart': create_emotion_chart(df),
         'sentiment_counts': counts.to_dict(),
         'top_positive': top_pos,
         'top_negative': top_neg,

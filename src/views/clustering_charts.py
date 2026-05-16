@@ -2,34 +2,28 @@
 ============================================================
 Módulo: views/clustering_charts.py
 ============================================================
-Visualizaciones del análisis de clustering y Visión 360º.
-
-Responsabilidad Única:
-    Generar gráficos de Plotly a partir de los datos numéricos
-    calculados por models/clustering.py.
+Visualizaciones del análisis de clustering semántico.
 """
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 
 from src.core.theme import (
     apply_corporate_layout, CORP_BG, CORP_GRID, CORP_PALETTE
 )
 
-
 def create_silhouette_chart(sil_scores: list, best_k: int) -> go.Figure:
     """
-    Genera el gráfico de evaluación Silhouette con marcador del K óptimo.
-
-    Args:
-        sil_scores (list[tuple]): Lista de (K, score).
-        best_k (int): K óptimo seleccionado.
-
-    Returns:
-        go.Figure: Línea con área sombreada.
+    Genera el gráfico de evaluación Silhouette.
     """
-    print("   [CLUST] Renderizando gráfica Silhouette...")
+    if not sil_scores:
+        # Retornar gráfico vacío con mensaje si no hay datos
+        fig = go.Figure()
+        fig.add_annotation(text="Datos de silueta no disponibles en esta versión", showarrow=False)
+        return apply_corporate_layout(fig, "Análisis de Agrupación (Silhouette)")
+
     ks, ss = zip(*sil_scores)
     fig = go.Figure(data=go.Scatter(
         x=list(ks), y=list(ss), mode='lines+markers',
@@ -41,58 +35,41 @@ def create_silhouette_chart(sil_scores: list, best_k: int) -> go.Figure:
                   annotation_text=f"K óptimo = {best_k}")
     return apply_corporate_layout(fig, "Análisis de Agrupación Óptima (Silhouette)")
 
-
-def create_tsne_3d_chart(df: pd.DataFrame, tsne_coords, sample_idx: list) -> go.Figure:
+def create_tsne_3d_chart(df: pd.DataFrame, tsne_coords, sample_idx: list, cluster_labels: dict) -> go.Figure:
     """
-    Genera el cubo 3D del espacio latente t-SNE.
-
-    Args:
-        df (pd.DataFrame): DataFrame con columnas 'cluster' y 'text_clean'.
-        tsne_coords (ndarray): Coordenadas t-SNE de forma (n_samples, 3).
-        sample_idx (list[int]): Índices de las muestras en el DataFrame.
-
-    Returns:
-        go.Figure: Scatter 3D interactivo coloreado por cluster.
+    Genera el cubo 3D del espacio latente t-SNE con etiquetas semánticas.
     """
-    print("   [CLUST] Renderizando t-SNE 3D...")
+    print("   [CLUST] Renderizando t-SNE 3D Semántico...")
+    
     tsne_df = pd.DataFrame({
         'X': tsne_coords[:, 0], 'Y': tsne_coords[:, 1], 'Z': tsne_coords[:, 2],
-        'cluster': [str(df.iloc[i]['cluster']) for i in sample_idx],
+        'cluster': [cluster_labels.get(df.iloc[i]['cluster'], f"Tema {df.iloc[i]['cluster']}") for i in sample_idx],
         'text': [df.iloc[i]['text_clean'][:100] for i in sample_idx]
     })
 
     fig = px.scatter_3d(
         tsne_df, x='X', y='Y', z='Z', color='cluster',
         hover_data=['text'], color_discrete_sequence=CORP_PALETTE,
-        title=f"Espacio Latente 3D (t-SNE) - {len(sample_idx)} muestras"
+        title=f"Espacio Semántico 3D (t-SNE) - {len(sample_idx)} muestras"
     )
-    fig.update_traces(marker=dict(size=5, line=dict(width=1, color='DarkSlateGrey'), opacity=0.8))
+    fig.update_traces(marker=dict(size=5, line=dict(width=0.5, color='white'), opacity=0.8))
     fig.update_layout(
         template='plotly_dark', paper_bgcolor=CORP_BG,
         scene=dict(
-            xaxis=dict(showbackground=False, gridcolor=CORP_GRID),
-            yaxis=dict(showbackground=False, gridcolor=CORP_GRID),
-            zaxis=dict(showbackground=False, gridcolor=CORP_GRID),
-            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))
+            xaxis=dict(showbackground=False, gridcolor=CORP_GRID, title="Semántica X"),
+            yaxis=dict(showbackground=False, gridcolor=CORP_GRID, title="Semántica Y"),
+            zaxis=dict(showbackground=False, gridcolor=CORP_GRID, title="Semántica Z"),
         ),
         margin=dict(l=0, r=0, b=0, t=50), height=800
     )
     return fig
 
-
-def create_cluster_sizes_chart(df: pd.DataFrame) -> go.Figure:
+def create_cluster_sizes_chart(df: pd.DataFrame, cluster_labels: dict) -> go.Figure:
     """
     Genera barras con la distribución de tamaño por cluster.
-
-    Args:
-        df (pd.DataFrame): DataFrame con columna 'cluster'.
-
-    Returns:
-        go.Figure: Barras verticales con colorscale Viridis.
     """
-    print("   [CLUST] Ensamblando barras de tamaño de clusters...")
     sizes = df['cluster'].value_counts().sort_index()
-    labels = [f"Cluster {i}" for i in sizes.index]
+    labels = [cluster_labels.get(i, f"Tema {i}")[:40] + "..." for i in sizes.index]
 
     fig = go.Figure(data=[go.Bar(
         x=labels, y=sizes.values,
@@ -100,91 +77,49 @@ def create_cluster_sizes_chart(df: pd.DataFrame) -> go.Figure:
                     line=dict(color='white', width=1.5)),
         text=sizes.values, textposition='auto'
     )])
-    return apply_corporate_layout(fig, "Distribución Volumétrica por Cluster")
-
-
-def create_topics_chart(lda_topics: list) -> go.Figure | None:
-    """
-    Genera la matriz de términos LDA como barras agrupadas.
-
-    Args:
-        lda_topics (list[dict]): Temas descubiertos por LDA.
-
-    Returns:
-        go.Figure | None: Barras agrupadas o None si no hay datos.
-    """
-    print("   [CLUST] Generando matriz de términos LDA...")
-    topics_data = []
-    for topic in lda_topics:
-        for word, weight in topic['words'][:8]:
-            topics_data.append({'Tema': topic['label'][:30], 'Palabra': word, 'Peso': weight})
-
-    if not topics_data:
-        return None
-
-    df_topics = pd.DataFrame(topics_data)
-    fig = px.bar(df_topics, x='Peso', y='Palabra', color='Tema',
-                 orientation='h', barmode='group', color_discrete_sequence=CORP_PALETTE)
-    fig.update_traces(marker_line_width=1.5, opacity=0.9)
-    fig = apply_corporate_layout(fig, "Matriz de Términos LDA")
-    fig.update_layout(height=700)
+    fig = apply_corporate_layout(fig, "Distribución de Temas Detectados")
+    fig.update_layout(xaxis_tickangle=-45)
     return fig
 
-
-def create_sunburst_360(df: pd.DataFrame) -> go.Figure:
+def create_sunburst_360(df: pd.DataFrame, cluster_labels: dict) -> go.Figure:
     """
     Genera el gráfico jerárquico Sunburst (Corpus → Temas → Sentimiento).
-
-    Args:
-        df (pd.DataFrame): DataFrame con columnas 'cluster' y 'sentiment'.
-
-    Returns:
-        go.Figure: Sunburst chart interactivo.
     """
-    print("   [CLUST] Renderizando Visión 360º (Sunburst Chart)...")
     if 'sentiment' not in df.columns or 'cluster' not in df.columns:
-        print("   ⚠️ Faltan columnas. Sunburst omitido.")
         return go.Figure()
 
     df_temp = df.copy()
-    df_temp['cluster_label'] = df_temp['cluster'].apply(lambda x: f"Tema {x}")
+    df_temp['cluster_label'] = df_temp['cluster'].apply(lambda x: cluster_labels.get(x, f"Tema {x}")[:30])
+    
     agg_df = df_temp.groupby(['cluster_label', 'sentiment']).size().reset_index(name='count')
-    agg_df['root'] = 'Corpus Total'
+    agg_df['root'] = 'Audiencia Total'
 
-    color_map = {'POS': '#10B981', 'NEG': '#EF4444', 'NEU': '#64748B', 'Corpus Total': '#0F172A'}
+    color_map = {'POS': '#10B981', 'NEG': '#EF4444', 'NEU': '#64748B', 'Audiencia Total': '#0F172A'}
 
     fig = px.sunburst(
         agg_df, path=['root', 'cluster_label', 'sentiment'],
         values='count', color='sentiment', color_discrete_map=color_map,
-        title="Visión 360º: Temas y Percepción Emocional"
     )
     fig.update_traces(
-        textinfo="label+percent parent", insidetextorientation='radial',
+        textinfo="label+percent parent",
         marker=dict(line=dict(color=CORP_BG, width=2))
     )
-    fig = apply_corporate_layout(fig, "Visión 360º: Temas y Percepción Emocional")
+    fig = apply_corporate_layout(fig, "Visión 360º: Temas y Percepción")
     fig.update_layout(height=700, margin=dict(t=50, l=0, r=0, b=0))
     return fig
-
 
 def generate_clustering_charts(df: pd.DataFrame, cluster_data: dict) -> dict:
     """
     Orquesta la generación de todos los gráficos de clustering.
-
-    Args:
-        df (pd.DataFrame): DataFrame con columna 'cluster'.
-        cluster_data (dict): Datos calculados por models/clustering.compute_clusters().
-
-    Returns:
-        dict: Diccionario con gráficos Plotly y metadatos.
     """
+    cluster_labels = cluster_data.get('cluster_labels', {})
+    
     return {
         'best_k': cluster_data['best_k'],
         'silhouette_chart': create_silhouette_chart(
-            cluster_data['silhouette_scores'], cluster_data['best_k']),
+            cluster_data.get('silhouette_scores', []), cluster_data['best_k']),
         'tsne_chart': create_tsne_3d_chart(
-            df, cluster_data['tsne_3d_coords'], cluster_data['tsne_sample_idx']),
-        'cluster_sizes_chart': create_cluster_sizes_chart(df),
-        'topics_chart': create_topics_chart(cluster_data['lda_topics']),
-        'sunburst_360': create_sunburst_360(df),
+            df, cluster_data['tsne_3d_coords'], cluster_data['tsne_sample_idx'], cluster_labels),
+        'cluster_sizes_chart': create_cluster_sizes_chart(df, cluster_labels),
+        'sunburst_360': create_sunburst_360(df, cluster_labels),
     }

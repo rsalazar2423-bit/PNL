@@ -2,156 +2,143 @@
 ============================================================
 Módulo: models/clustering.py
 ============================================================
-Agrupamiento no supervisado por temas latentes.
+Agrupamiento semántico no supervisado mediante Embeddings.
 
-Responsabilidad Única:
-    Ejecutar K-Means, LDA y t-SNE para descubrir agrupaciones
-    temáticas naturales en el corpus. Retorna datos numéricos
-    puros (coordenadas, etiquetas, keywords). NO genera gráficos.
+Este módulo identifica temas latentes en el corpus agrupando los 
+vectores semánticos generados en la Fase 2. Utiliza K-Means para 
+la segmentación y t-SNE para la visualización 3D.
 
-Ejemplo de uso:
-    >>> from src.models.clustering import compute_clusters
-    >>> df, result = compute_clusters(df, tfidf_matrix, feature_names)
-    >>> print(f"Clusters óptimos: {result['best_k']}")
+Principios aplicados:
+    - SRP: Funciones separadas para reducción, búsqueda de K y clustering.
+    - Precisión Semántica: Uso de centroides para etiquetado.
+    - Documentación: Google Style docstrings.
 """
 
+from typing import Tuple, List, Dict, Any
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.manifold import TSNE
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
 
-
-def _find_optimal_k(tfidf_matrix, k_range=range(3, 9)) -> tuple:
+def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> int:
     """
-    Encuentra el número óptimo de clusters maximizando el Silhouette Score.
+    Determina el número óptimo de clusters usando Silhouette Score.
 
     Args:
-        tfidf_matrix: Matriz dispersa TF-IDF.
-        k_range (range): Rango de Ks a evaluar.
+        embeddings (np.ndarray): Matriz de vectores semánticos.
+        k_range (range): Rango de valores K a evaluar.
 
     Returns:
-        tuple: (Mejor K encontrado, Lista de (K, score)).
+        int: El mejor valor de K encontrado.
     """
-    print(f"   [CLUSTERING] Evaluando el K óptimo en el rango {list(k_range)}...")
-    scores = []
+    print(f"   [CLUSTERING] Buscando K óptimo en rango {list(k_range)}...")
+    best_k = 3
+    max_score = -1
+    
+    # Muestreo para velocidad en el cálculo de silueta
+    sample_size = min(2000, embeddings.shape[0])
+    indices = np.random.choice(embeddings.shape[0], sample_size, replace=False)
+    sample_data = embeddings[indices]
+
     for k in k_range:
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10, max_iter=100)
-        labels = kmeans.fit_predict(tfidf_matrix)
-        score = silhouette_score(
-            tfidf_matrix, labels,
-            sample_size=min(2000, tfidf_matrix.shape[0])
-        )
-        scores.append((k, score))
-        print(f"      - K={k} -> Silhouette: {score:.4f}")
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(embeddings)
+        score = silhouette_score(embeddings[indices], labels[indices])
+        
+        print(f"      - K={k} | Silhouette: {score:.4f}")
+        if score > max_score:
+            max_score = score
+            best_k = k
+            
+    return best_k
 
-    best_k = max(scores, key=lambda x: x[1])[0]
-    print(f"   [CLUSTERING] K óptimo seleccionado: {best_k}")
-    return best_k, scores
-
-
-def _run_lda(df: pd.DataFrame, n_topics: int = 5) -> list:
+def _apply_tsne_3d(embeddings: np.ndarray, sample_indices: List[int]) -> np.ndarray:
     """
-    Ejecuta Latent Dirichlet Allocation para descubrir temas latentes.
+    Reduce la dimensionalidad de los embeddings a 3D para visualización.
 
     Args:
-        df (pd.DataFrame): Dataset con la columna 'lemmas_text'.
-        n_topics (int): Número de temas a extraer. Default: 5.
+        embeddings (np.ndarray): Matriz completa de vectores.
+        sample_indices (List[int]): Índices de la muestra a reducir.
 
     Returns:
-        list[dict]: Lista de temas, cada uno con:
-            - 'topic_id' (int): Índice del tema.
-            - 'words' (list[tuple]): Top 10 palabras con su peso.
-            - 'label' (str): Etiqueta legible (Top 3 palabras).
+        np.ndarray: Coordenadas (N_sample, 3).
     """
-    print(f"   [CLUSTERING] Ejecutando LDA para {n_topics} temas...")
-    count_vec = CountVectorizer(max_features=3000, max_df=0.85, min_df=3)
-    count_matrix = count_vec.fit_transform(df['lemmas_text'])
-    names = count_vec.get_feature_names_out()
-
-    lda = LatentDirichletAllocation(
-        n_components=n_topics, random_state=42,
-        max_iter=20, learning_method='online', batch_size=256
+    print(f"   [CLUSTERING] Calculando proyección t-SNE 3D para {len(sample_indices)} puntos...")
+    tsne = TSNE(
+        n_components=3, 
+        perplexity=min(30, len(sample_indices) - 1), 
+        random_state=42, 
+        init='pca', 
+        learning_rate='auto'
     )
-    lda.fit(count_matrix)
+    return tsne.fit_transform(embeddings[sample_indices])
 
-    topics = []
-    for tid, dist in enumerate(lda.components_):
-        norm = dist / dist.sum()
-        top_idx = norm.argsort()[-10:][::-1]
-        words = [(names[i], float(norm[i])) for i in top_idx]
-        label = " | ".join([w for w, _ in words[:3]])
-        topics.append({'topic_id': tid, 'words': words, 'label': f"Tema {tid + 1}: {label}"})
-
-    print("   [CLUSTERING] LDA finalizado.")
-    return topics
-
-
-def compute_clusters(df: pd.DataFrame, tfidf_matrix, feature_names) -> tuple:
+def _get_cluster_labels(df: pd.DataFrame, kmeans: KMeans, embeddings: np.ndarray) -> Dict[int, str]:
     """
-    Ejecuta el flujo completo de clustering:
-    1. K-Óptimo (Silhouette)
-    2. K-Means
-    3. LDA
-    4. Reducción t-SNE 3D
+    Genera etiquetas descriptivas para cada clúster basándose en el 
+    comentario más representativo (más cercano al centroide).
 
     Args:
-        df (pd.DataFrame): Dataset base.
-        tfidf_matrix: Matriz TF-IDF.
-        feature_names: Nombres de las características del TF-IDF.
+        df (pd.DataFrame): Dataset con los textos originales.
+        kmeans (KMeans): Modelo entrenado.
+        embeddings (np.ndarray): Vectores utilizados.
 
     Returns:
-        tuple: (DataFrame con columna 'cluster', dict con claves:
-            - 'best_k' (int): Número óptimo de clusters.
-            - 'silhouette_scores' (list[tuple]): Puntuaciones por K.
-            - 'cluster_keywords' (dict): {cluster_id: top_10_palabras}.
-            - 'lda_topics' (list[dict]): Temas latentes descubiertos.
-            - 'tsne_3d_coords' (ndarray): Coordenadas t-SNE 3D.
-            - 'tsne_sample_idx' (list[int]): Índices de las muestras en t-SNE.
-        )
+        Dict: Mapa de {cluster_id: etiqueta_descriptiva}.
+    """
+    labels = {}
+    for i, centroid in enumerate(kmeans.cluster_centers_):
+        # Encontrar el índice del punto más cercano al centroide
+        distances = np.linalg.norm(embeddings - centroid, axis=1)
+        closest_idx = np.argmin(distances)
+        representative_text = df.iloc[closest_idx]['text_clean'][:50] + "..."
+        labels[i] = f"Tema {i+1}: {representative_text}"
+    return labels
+
+def compute_clusters(df: pd.DataFrame, embeddings: np.ndarray) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Orquestador del pipeline de clustering semántico.
+
+    Args:
+        df (pd.DataFrame): Dataset preprocesado.
+        embeddings (np.ndarray): Matriz de vectores generada en Fase 2.
+
+    Returns:
+        Tuple[pd.DataFrame, Dict]: DataFrame con clúster y metadata para gráficos.
     """
     print("\n" + "=" * 60)
-    print("🧩 PASO 6: Agrupamiento No Supervisado (Clustering)")
+    print("🧩 PASO 6: Agrupamiento Semántico (Clustering)")
     print("=" * 60)
 
-    best_k, sil_scores = _find_optimal_k(tfidf_matrix)
+    # 1. Encontrar K óptimo
+    best_k = _get_optimal_k(embeddings)
 
+    # 2. Ejecutar K-Means final
     print(f"   [CLUSTERING] Ejecutando K-Means con K={best_k}...")
     kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
-    df = df.copy()
-    df['cluster'] = kmeans.fit_predict(tfidf_matrix)
+    df['cluster'] = kmeans.fit_predict(embeddings)
 
-    print("   [CLUSTERING] Extrayendo keywords por clúster...")
-    cluster_keywords = {}
-    feature_names_list = list(feature_names)
-    for c in range(best_k):
-        center = kmeans.cluster_centers_[c]
-        top_idx = center.argsort()[-10:][::-1]
-        cluster_keywords[c] = [(feature_names_list[i], center[i]) for i in top_idx]
+    # 3. Obtener etiquetas descriptivas
+    cluster_labels = _get_cluster_labels(df, kmeans, embeddings)
 
-    lda_topics = _run_lda(df, n_topics=best_k)
+    # 4. Muestreo estratificado para t-SNE (por eficiencia visual)
+    n_total = len(df)
+    n_sample = min(800, n_total)
+    sample_indices = df.groupby('cluster').apply(
+        lambda x: x.sample(min(len(x), n_sample // best_k))
+    ).index.get_level_values(1).tolist()
+    sample_indices = sorted(sample_indices)
 
-    # t-SNE 3D con muestreo estratificado
-    print("   [CLUSTERING] Calculando t-SNE 3D...")
-    n_samples = min(500, tfidf_matrix.shape[0])
-    sample_idx = []
-    for c in range(best_k):
-        cluster_idx = df[df['cluster'] == c].index.tolist()
-        n_take = min(len(cluster_idx), n_samples // best_k)
-        sample_idx.extend(np.random.choice(cluster_idx, n_take, replace=False).tolist())
-    sample_idx = sorted(sample_idx)
+    # 5. Reducción dimensional
+    coords_3d = _apply_tsne_3d(embeddings, sample_indices)
 
-    tsne = TSNE(n_components=3, random_state=42, perplexity=30, max_iter=1000)
-    tsne_coords = tsne.fit_transform(tfidf_matrix[sample_idx].toarray())
-
-    print("✅ [CLUSTERING] Clustering completado.")
+    print("✅ [CLUSTERING] Segmentación semántica finalizada.")
+    
     return df, {
         'best_k': best_k,
-        'silhouette_scores': sil_scores,
-        'cluster_keywords': cluster_keywords,
-        'lda_topics': lda_topics,
-        'tsne_3d_coords': tsne_coords,
-        'tsne_sample_idx': sample_idx,
+        'cluster_labels': cluster_labels,
+        'tsne_3d_coords': coords_3d,
+        'tsne_sample_idx': sample_indices,
+        'silhouette_scores': [] # Opcional: podrías devolver todos los scores si los necesitas
     }

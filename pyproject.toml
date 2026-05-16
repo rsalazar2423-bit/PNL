@@ -1,0 +1,26 @@
+[project]
+name = "pnl-app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "accelerate>=0.26",
+    "es-core-news-sm",
+    "gradio>=4.0",
+    "joblib>=1.3",
+    "matplotlib>=3.8",
+    "nltk>=3.8",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "plotly>=5.18",
+    "pysentimiento>=0.7",
+    "rank-bm25>=0.2",
+    "scikit-learn>=1.3",
+    "sentence-transformers>=5.5.0",
+    "spacy>=3.7",
+    "wordcloud>=1.9",
+]
+
+[tool.uv.sources]
+es-core-news-sm = { url = "https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.8.0/es_core_news_sm-3.8.0-py3-none-any.whl" }
