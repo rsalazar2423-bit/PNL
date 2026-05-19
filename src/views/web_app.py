@@ -23,8 +23,6 @@ def create_web_app() -> tuple:
 
         gr.Markdown("# Panel de Inteligencia de Opinión — Análisis NLP\n### Estudio de Audiencia: Entrevista a Juan Daniel Oviedo")
 
-        rag_state = gr.State(None)
-
         # ── PANTALLA 1: Carga ──
         with gr.Column(visible=True) as loading_screen:
             gr.Markdown("### ⚙️ El sistema de IA requiere inicializarse.")
@@ -32,7 +30,7 @@ def create_web_app() -> tuple:
             loading_status = gr.Textbox(label="Estado del Servidor", value="Esperando inicio...", interactive=False)
 
         # ── PANTALLA 2: Dashboard ──
-        with gr.Column(visible=False) as dashboard_screen:
+        with gr.Column(visible=True) as dashboard_screen:
             with gr.Tabs():
                 with gr.Tab("Resumen Ejecutivo"):
                     with gr.Row():
@@ -85,12 +83,12 @@ def create_web_app() -> tuple:
                     clear = gr.Button("Limpiar")
 
         # ── EVENTOS ──
-        msg.submit(respond, [msg, chatbot, rag_state, rag_mode], [msg, chatbot])
+        msg.submit(respond, [msg, chatbot, rag_mode], [msg, chatbot])
         clear.click(lambda: None, None, chatbot, queue=False)
         btn_export.click(fn=export_data, inputs=[], outputs=btn_export)
 
         outputs = [
-            loading_screen, dashboard_screen, loading_status, rag_state,
+            loading_screen, dashboard_screen, loading_status,
             kpi_1, kpi_2, kpi_3, kpi_4, wc_html,
             plot_hist, plot_temporal, plot_auth, plot_likes, plot_words,
             plot_tf_top, plot_tf_bi, plot_tf_tri,

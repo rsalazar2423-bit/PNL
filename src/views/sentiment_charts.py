@@ -9,6 +9,7 @@ Responsabilidad Única:
     las columnas 'sentiment' y 'sentiment_score' ya calculadas.
 """
 
+import duckdb
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -19,18 +20,26 @@ from src.core.theme import (
 )
 
 
-def create_distribution_pie(df: pd.DataFrame) -> go.Figure:
+def create_distribution_pie(parquet_path: str) -> go.Figure:
     """
     Genera un Pie Chart volumétrico con la proporción de sentimientos.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'sentiment'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Donut chart con pull en la categoría dominante.
     """
     print("   [SENT] Generando Pie Chart de sentimientos...")
-    counts = df['sentiment'].value_counts()
+    query = f"SELECT sentiment, count(*) as count FROM '{parquet_path}' WHERE sentiment IS NOT NULL GROUP BY sentiment"
+    counts_df = duckdb.sql(query).df()
+    
+    if counts_df.empty:
+        return go.Figure()
+        
+    counts_df.set_index('sentiment', inplace=True)
+    counts = counts_df['count']
+    
     fig = go.Figure(data=[go.Pie(
         labels=[SENTIMENT_LABELS.get(k, k) for k in counts.index],
         values=counts.values,
@@ -46,18 +55,26 @@ def create_distribution_pie(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def create_bars_chart(df: pd.DataFrame) -> go.Figure:
+def create_bars_chart(parquet_path: str) -> go.Figure:
     """
     Genera barras absolutas con el conteo por polaridad.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'sentiment'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Barras verticales coloreadas por sentimiento.
     """
     print("   [SENT] Generando barras de volumen absoluto...")
-    counts = df['sentiment'].value_counts()
+    query = f"SELECT sentiment, count(*) as count FROM '{parquet_path}' WHERE sentiment IS NOT NULL GROUP BY sentiment"
+    counts_df = duckdb.sql(query).df()
+    
+    if counts_df.empty:
+        return go.Figure()
+        
+    counts_df.set_index('sentiment', inplace=True)
+    counts = counts_df['count']
+    
     fig = go.Figure(data=[go.Bar(
         x=[SENTIMENT_LABELS.get(k, k) for k in counts.index],
         y=counts.values,
@@ -72,21 +89,22 @@ def create_bars_chart(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def create_3d_scatter(df: pd.DataFrame) -> go.Figure:
+def create_3d_scatter(parquet_path: str) -> go.Figure:
     """
     Genera un Scatter 3D: Confianza × Likes × Longitud de texto.
 
     Args:
-        df (pd.DataFrame): DataFrame con 'sentiment', 'sentiment_score',
-                           'text_clean' y 'likes'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Dispersión 3D interactiva con muestreo.
     """
     print("   [SENT] Renderizando dispersión 3D...")
-    df_3d = df.copy()
-    df_3d['length'] = df_3d['text_clean'].str.len()
-    df_3d_sample = df_3d.sample(min(1500, len(df_3d)), random_state=42)
+    query = f"SELECT sentiment, sentiment_score, likes, length(text_clean) as length, text_clean FROM '{parquet_path}' USING SAMPLE 1500"
+    df_3d_sample = duckdb.sql(query).df()
+
+    if df_3d_sample.empty:
+        return go.Figure()
 
     fig = px.scatter_3d(
         df_3d_sample,
@@ -109,18 +127,25 @@ def create_3d_scatter(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def create_emotion_chart(df: pd.DataFrame) -> go.Figure:
+def create_emotion_chart(parquet_path: str) -> go.Figure:
     """
     Genera un gráfico de barras con la distribución de emociones detectadas.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'emotion'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Gráfico de barras horizontales estilizado.
     """
     print("   [SENT] Generando gráfico de emociones...")
-    counts = df['emotion'].value_counts()
+    query = f"SELECT emotion, count(*) as count FROM '{parquet_path}' WHERE emotion IS NOT NULL GROUP BY emotion"
+    counts_df = duckdb.sql(query).df()
+    
+    if counts_df.empty:
+        return go.Figure()
+        
+    counts_df.set_index('emotion', inplace=True)
+    counts = counts_df['count']
     
     # Paleta de colores para emociones
     emotion_colors = {
@@ -146,30 +171,38 @@ def create_emotion_chart(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def generate_sentiment_charts(df: pd.DataFrame) -> dict:
+def generate_sentiment_charts(parquet_path: str) -> dict:
     """
-    Orquesta la generación de todos los gráficos de sentimiento.
+    Orquesta la generación de todos los gráficos de sentimiento usando DuckDB.
 
     Args:
-        df (pd.DataFrame): DataFrame con columnas de sentimiento.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         dict: Diccionario con gráficos Plotly y Top 10 comentarios.
     """
-    print("   [SENT] Construyendo visualizaciones de sentimiento...")
-    counts = df['sentiment'].value_counts()
+    print("   [SENT] Construyendo visualizaciones de sentimiento [DuckDB]...")
+    query_counts = f"SELECT sentiment, count(*) as count FROM '{parquet_path}' WHERE sentiment IS NOT NULL GROUP BY sentiment"
+    counts_df = duckdb.sql(query_counts).df()
+    
+    if not counts_df.empty:
+        counts_df.set_index('sentiment', inplace=True)
+        counts = counts_df['count'].to_dict()
+    else:
+        counts = {}
 
-    top_pos = df[df['sentiment'] == 'POS'].nlargest(10, 'sentiment_score')[
-        ['text', 'likes', 'sentiment_score']].to_dict('records')
-    top_neg = df[df['sentiment'] == 'NEG'].nlargest(10, 'sentiment_score')[
-        ['text', 'likes', 'sentiment_score']].to_dict('records')
+    query_pos = f"SELECT text, likes, sentiment_score FROM '{parquet_path}' WHERE sentiment = 'POS' ORDER BY sentiment_score DESC LIMIT 10"
+    top_pos = duckdb.sql(query_pos).df().to_dict('records')
+    
+    query_neg = f"SELECT text, likes, sentiment_score FROM '{parquet_path}' WHERE sentiment = 'NEG' ORDER BY sentiment_score DESC LIMIT 10"
+    top_neg = duckdb.sql(query_neg).df().to_dict('records')
 
     return {
-        'distribution_chart': create_distribution_pie(df),
-        'bars_chart': create_bars_chart(df),
-        'likes_sentiment_chart': create_3d_scatter(df),
-        'emotion_chart': create_emotion_chart(df),
-        'sentiment_counts': counts.to_dict(),
+        'distribution_chart': create_distribution_pie(parquet_path),
+        'bars_chart': create_bars_chart(parquet_path),
+        'likes_sentiment_chart': create_3d_scatter(parquet_path),
+        'emotion_chart': create_emotion_chart(parquet_path),
+        'sentiment_counts': counts,
         'top_positive': top_pos,
         'top_negative': top_neg,
     }

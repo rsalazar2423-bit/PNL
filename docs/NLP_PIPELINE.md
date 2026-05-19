@@ -24,10 +24,14 @@ El flujo de datos del proyecto se divide en fases secuenciales que transforman c
 - **Visualización 3D**: Proyecta las 384 dimensiones a 3 dimensiones mediante t-SNE para navegación visual.
 
 ### 5. Asistente Cognitivo RAG (`rag.py`)
-- **Indexación**: Crea un índice de búsqueda (BM25 o Vectorial).
+- **Indexación**: Crea un índice de búsqueda lexical (BM25) para recuperar información exacta a velocidad extrema.
 - **Recuperación**: Busca los comentarios más relevantes ante una pregunta.
-- **Generación**: Sintetiza una respuesta usando el contexto recuperado, citando las fuentes originales.
+- **Generación**: Sintetiza una respuesta usando el contexto recuperado, citando las fuentes originales y operando en el backend de forma segura para evitar sobrecargas de red.
+
+### 6. Almacenamiento y Consulta Analítica (`DuckDB`)
+- **Parquet**: Exportación de todos los datos limpios e inferidos a un archivo binario columnar comprimido.
+- **Agregaciones SQL**: Consultas directas al archivo Parquet para generar dinámicamente los gráficos Plotly de EDA y Sentimiento, evitando la sobrecarga en RAM del servidor web.
 
 ## 📈 Métricas de Calidad
-- **Silhouette Score**: Utilizado para validar que los grupos temáticos sean cohesivos y estén bien separados.
+- **Silhouette Score**: Utilizado para validar que los grupos temáticos sean cohesivos y estén bien separados, mostrando matemáticamente el `K` óptimo para la segmentación.
 - **Emotion Score**: Mide la intensidad de la carga emocional detectada.

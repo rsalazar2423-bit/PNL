@@ -21,7 +21,7 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from sklearn.manifold import TSNE
 
-def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> int:
+def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> Tuple[int, List[Tuple[int, float]]]:
     """
     Determina el número óptimo de clusters usando Silhouette Score.
 
@@ -35,6 +35,7 @@ def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> int:
     print(f"   [CLUSTERING] Buscando K óptimo en rango {list(k_range)}...")
     best_k = 3
     max_score = -1
+    silhouette_scores = []
     
     # Muestreo para velocidad en el cálculo de silueta
     sample_size = min(2000, embeddings.shape[0])
@@ -47,11 +48,12 @@ def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> int:
         score = silhouette_score(embeddings[indices], labels[indices])
         
         print(f"      - K={k} | Silhouette: {score:.4f}")
+        silhouette_scores.append((k, score))
         if score > max_score:
             max_score = score
             best_k = k
             
-    return best_k
+    return best_k, silhouette_scores
 
 def _apply_tsne_3d(embeddings: np.ndarray, sample_indices: List[int]) -> np.ndarray:
     """
@@ -112,7 +114,7 @@ def compute_clusters(df: pd.DataFrame, embeddings: np.ndarray) -> Tuple[pd.DataF
     print("=" * 60)
 
     # 1. Encontrar K óptimo
-    best_k = _get_optimal_k(embeddings)
+    best_k, sil_scores = _get_optimal_k(embeddings)
 
     # 2. Ejecutar K-Means final
     print(f"   [CLUSTERING] Ejecutando K-Means con K={best_k}...")
@@ -140,5 +142,5 @@ def compute_clusters(df: pd.DataFrame, embeddings: np.ndarray) -> Tuple[pd.DataF
         'cluster_labels': cluster_labels,
         'tsne_3d_coords': coords_3d,
         'tsne_sample_idx': sample_indices,
-        'silhouette_scores': [] # Opcional: podrías devolver todos los scores si los necesitas
+        'silhouette_scores': sil_scores
     }

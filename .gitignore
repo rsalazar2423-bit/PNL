@@ -15,6 +15,7 @@ __pycache__/
 *.db
 *.csv
 *.json
+*.parquet
 pipeline_results*
 nlp_export_*
 emotions.db

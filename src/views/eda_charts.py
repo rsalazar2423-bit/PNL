@@ -15,6 +15,7 @@ import re
 import base64
 from collections import Counter
 
+import duckdb
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -26,18 +27,19 @@ import matplotlib.pyplot as plt
 from src.core.theme import apply_corporate_layout, CORP_BG
 
 
-def create_length_histogram(df: pd.DataFrame) -> go.Figure:
+def create_length_histogram(parquet_path: str) -> go.Figure:
     """
     Genera un histograma volumétrico con la distribución de longitud de caracteres.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'text_clean'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Histograma con línea de mediana.
     """
     print("   [EDA] Generando histograma volumétrico de longitudes...")
-    lengths = df['text_clean'].str.len()
+    query = f"SELECT length(text_clean) as l FROM '{parquet_path}' WHERE text_clean IS NOT NULL"
+    lengths = duckdb.sql(query).df()['l']
     median_len = lengths.median()
 
     fig = go.Figure(go.Histogram(
@@ -52,22 +54,24 @@ def create_length_histogram(df: pd.DataFrame) -> go.Figure:
     return apply_corporate_layout(fig, "Distribución de Longitud de Comentarios (Volumétrico)")
 
 
-def create_top_authors_chart(df: pd.DataFrame, top_n: int = 20) -> go.Figure:
+def create_top_authors_chart(parquet_path: str, top_n: int = 20) -> go.Figure:
     """
     Genera barras horizontales con los autores más activos.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'author'.
+        parquet_path (str): Ruta al archivo parquet.
         top_n (int): Número de autores a mostrar. Default: 20.
 
     Returns:
         go.Figure: Barras horizontales con sombreado de color.
     """
     print(f"   [EDA] Calculando top {top_n} autores más activos...")
-    top_authors = df['author'].value_counts().head(top_n)
+    query = f"SELECT author, COUNT(*) as c FROM '{parquet_path}' WHERE author IS NOT NULL GROUP BY author ORDER BY c DESC LIMIT {top_n}"
+    top_authors = duckdb.sql(query).df()
+    
     fig = go.Figure(go.Bar(
-        x=top_authors.values, y=top_authors.index, orientation='h',
-        marker=dict(color=top_authors.values, colorscale='Tealgrn',
+        x=top_authors['c'], y=top_authors['author'], orientation='h',
+        marker=dict(color=top_authors['c'], colorscale='Tealgrn',
                     line=dict(color='white', width=1.5))
     ))
     fig = apply_corporate_layout(fig, f"Top {top_n} Autores Más Activos")
@@ -75,18 +79,19 @@ def create_top_authors_chart(df: pd.DataFrame, top_n: int = 20) -> go.Figure:
     return fig
 
 
-def create_likes_distribution(df: pd.DataFrame) -> go.Figure:
+def create_likes_distribution(parquet_path: str) -> go.Figure:
     """
     Genera la distribución de likes en escala logarítmica.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'likes'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Histograma en escala log.
     """
     print("   [EDA] Procesando distribución de impacto (Likes)...")
-    df_with_likes = df[df['likes'] > 0]
+    query = f"SELECT likes FROM '{parquet_path}' WHERE likes > 0"
+    df_with_likes = duckdb.sql(query).df()
     fig = go.Figure(go.Histogram(
         x=df_with_likes['likes'], nbinsx=50,
         marker=dict(color='#8b5cf6', line=dict(color='white', width=1))
@@ -96,18 +101,20 @@ def create_likes_distribution(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def create_wordcloud_b64(df: pd.DataFrame) -> str:
+def create_wordcloud_b64(parquet_path: str) -> str:
     """
     Genera una nube de palabras como string Base64.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'lemmas_text'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         str: Imagen PNG codificada en Base64.
     """
     print("   [EDA] Renderizando Nube de Palabras en memoria (Base64)...")
-    all_text = ' '.join(df['lemmas_text'].dropna())
+    query = f"SELECT lemmas_text FROM '{parquet_path}' WHERE lemmas_text IS NOT NULL"
+    lemmas_df = duckdb.sql(query).df()
+    all_text = ' '.join(lemmas_df['lemmas_text'])
     wc = WordCloud(
         width=1200, height=600, background_color=CORP_BG,
         colormap='cool', max_words=150,
@@ -127,19 +134,27 @@ def create_wordcloud_b64(df: pd.DataFrame) -> str:
     return img_b64
 
 
-def create_top_words_chart(df: pd.DataFrame, top_n: int = 30) -> go.Figure:
+def create_top_words_chart(parquet_path: str, top_n: int = 30) -> go.Figure:
     """
     Genera un Scatter 3D con la dispersión de los términos más frecuentes.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'lemmas'.
+        parquet_path (str): Ruta al archivo parquet.
         top_n (int): Número de términos. Default: 30.
 
     Returns:
         go.Figure: Gráfico 3D interactivo.
     """
     print(f"   [EDA] Renderizando Dispersión 3D de términos (Top {top_n})...")
-    all_lemmas = [l for lemmas in df['lemmas'] for l in lemmas]
+    # Extraemos todos los lemmas_text, los unimos y contamos
+    query = f"SELECT lemmas_text FROM '{parquet_path}' WHERE lemmas_text IS NOT NULL"
+    lemmas_df = duckdb.sql(query).df()
+    
+    all_lemmas = []
+    for text in lemmas_df['lemmas_text']:
+        if isinstance(text, str):
+            all_lemmas.extend(text.split())
+            
     word_counts = Counter(all_lemmas).most_common(top_n)
     words, counts = zip(*word_counts)
 
@@ -201,21 +216,26 @@ def _parse_youtube_relative_date(text: str) -> str:
     return 'Desconocido'
 
 
-def create_temporal_chart(df: pd.DataFrame) -> go.Figure:
+def create_temporal_chart(parquet_path: str) -> go.Figure:
     """
     Genera barras de distribución de comentarios por antigüedad.
 
     Args:
-        df (pd.DataFrame): DataFrame con columna 'published_at'.
+        parquet_path (str): Ruta al archivo parquet.
 
     Returns:
         go.Figure: Barras con gradiente por categoría temporal.
     """
     print("   [EDA] Generando análisis de distribución temporal...")
-    if 'published_at' not in df.columns:
+    query = f"SELECT published_at FROM '{parquet_path}' WHERE published_at IS NOT NULL"
+    try:
+        df_time = duckdb.sql(query).df()
+    except Exception:
+        return go.Figure()
+        
+    if df_time.empty:
         return go.Figure()
 
-    df_time = df.copy()
     df_time['antiguedad'] = df_time['published_at'].apply(_parse_youtube_relative_date)
 
     orden = ['0-6h', '6-24h', '1-3 días', '3-7 días', '1-4 sem', '1+ mes', '1+ año']
@@ -234,35 +254,38 @@ def create_temporal_chart(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def generate_eda_plots(df: pd.DataFrame) -> dict:
+def generate_eda_plots(parquet_path: str) -> dict:
     """
     Función orquestadora del EDA.
 
     Args:
-        df (pd.DataFrame): DataFrame preprocesado.
+        parquet_path (str): Ruta al archivo parquet preprocesado.
 
     Returns:
         dict: Estadísticas globales y figuras de Plotly.
     """
     print("\n" + "=" * 60)
-    print("📊 PASO 2: Análisis Exploratorio de Datos (EDA)")
+    print("📊 PASO 2: Análisis Exploratorio de Datos (EDA) [DuckDB]")
     print("=" * 60)
 
     print("   [EDA] Calculando métricas globales...")
+    query = f"SELECT count(*) as tc, count(DISTINCT author) as ua, avg(length(text_clean)) as al, sum(likes) as tl FROM '{parquet_path}'"
+    res = duckdb.sql(query).fetchone()
+    
     stats = {
-        'total_comments': len(df),
-        'unique_authors': df['author'].nunique(),
-        'avg_length': df['text_clean'].str.len().mean(),
-        'total_likes': int(df['likes'].sum()),
+        'total_comments': res[0],
+        'unique_authors': res[1],
+        'avg_length': res[2] if res[2] else 0,
+        'total_likes': int(res[3]) if res[3] else 0,
     }
 
     plots = {
-        'length_hist': create_length_histogram(df),
-        'top_authors': create_top_authors_chart(df),
-        'likes_dist': create_likes_distribution(df),
-        'wordcloud_b64': create_wordcloud_b64(df),
-        'top_words': create_top_words_chart(df),
-        'temporal_chart': create_temporal_chart(df),
+        'length_hist': create_length_histogram(parquet_path),
+        'top_authors': create_top_authors_chart(parquet_path),
+        'likes_dist': create_likes_distribution(parquet_path),
+        'wordcloud_b64': create_wordcloud_b64(parquet_path),
+        'top_words': create_top_words_chart(parquet_path),
+        'temporal_chart': create_temporal_chart(parquet_path),
         'stats': stats
     }
 

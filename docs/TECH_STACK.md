@@ -58,8 +58,13 @@ Este documento detalla el stack tecnológico del proyecto de Análisis NLP de Au
 
 ### **Pandas (`pandas`) y NumPy (`numpy`)**
 *   **Qué es:** Librerías fundamentales para manipulación de matrices numéricas y bases de datos estructuradas en memoria.
-*   **Cómo lo usamos:** Manejan todo el flujo de datos. El pipeline entero (`main.py`) opera sobre DataFrames de Pandas, permitiendo agregar columnas de predicciones y filtrado rápido.
+*   **Cómo lo usamos:** Manejan la ingesta y manipulación de datos en memoria durante las fases de preprocesamiento, tokenización e inferencia de Machine Learning.
 *   **Por qué lo elegimos:** Son el estándar absoluto en Data Science. Su código subyacente en C asegura la velocidad máxima que Python puede ofrecer para mover datos.
+
+### **DuckDB (`duckdb`)**
+*   **Qué es:** Un motor de base de datos analítico (OLAP) optimizado para consultas rápidas sobre archivos en disco (como Parquet o CSV) utilizando SQL.
+*   **Cómo lo usamos:** En `views/eda_charts.py` y `views/sentiment_charts.py`, es el motor encargado de realizar las agrupaciones, conteos e histogramas directamente desde el archivo `pipeline_data.parquet` en disco.
+*   **Por qué lo elegimos:** Resuelve el problema de memoria de Pandas al permitir análisis "Out-of-Core". Evita cargar millones de registros a la memoria RAM, haciendo que el Dashboard sea compatible con Big Data en computadoras estándar.
 
 ---
 

@@ -148,11 +148,14 @@ class RAGSystem:
             }
 
         if mode == "rustico":
-            # MODO RÚSTICO: Retornar los comentarios tal cual
-            answer = "**Resultados de la Búsqueda Directa (Modo Rústico):**\n\n"
+            # MODO RÚSTICO: Retornar los comentarios con formato mejorado (Markdown)
+            answer = "### 🔍 Resultados de la Búsqueda (Directa)\n\n"
+            answer += "*He encontrado los siguientes comentarios relevantes en la base de datos:*\n\n"
             for i, doc in enumerate(retrieved[:5], 1):
-                sent_icon = {'POS': '🟢', 'NEG': '🔴', 'NEU': '⚪'}.get(doc.get('sentiment', ''), '💬')
-                answer += f"{i}. {sent_icon} **{doc['author']}** (👍 {doc['likes']}):\n> *\"{doc['text']}\"*\n\n"
+                sent_icon = {'POS': '🟢 Positivo', 'NEG': '🔴 Negativo', 'NEU': '⚪ Neutral'}.get(doc.get('sentiment', ''), '💬')
+                answer += f"**{i}. {doc['author']}** &nbsp;|&nbsp; {sent_icon} &nbsp;|&nbsp; 👍 {doc['likes']} likes\n"
+                answer += f"> *\"{doc['text']}\"*\n\n"
+                answer += "---\n\n"
             
             return {
                 'answer': answer,
@@ -169,30 +172,47 @@ class RAGSystem:
                 if not success:
                     return self.query(question, mode="rustico") # Fallback a rústico si falla
             
+            # Enriquecer el contexto con sentimiento y likes
             context_parts = []
             for i, doc in enumerate(retrieved[:8], 1):
-                context_parts.append(f"Comentario: {doc['text']}")
+                sent = {'POS': 'Positivo', 'NEG': 'Negativo', 'NEU': 'Neutral'}.get(doc.get('sentiment', ''), 'Desconocido')
+                context_parts.append(f"- Comentario {i} (Sentimiento: {sent}, Likes: {doc['likes']}): \"{doc['text']}\"")
             context = "\n".join(context_parts)
 
             prompt = f"""<|im_start|>system
-Eres un analista de opinión política colombiana. Responde basándote estrictamente en los comentarios dados. Si no hay información suficiente, dilo. Sé claro y directo.<|im_end|>
+Eres un Analista de Inteligencia de Negocios y Opinión Pública experto.
+Tu objetivo es analizar los comentarios provistos y responder a la pregunta del usuario.
+REGLAS ESTRICTAS:
+1. Responde SIEMPRE usando viñetas (bullet points) o párrafos cortos para mayor claridad.
+2. Mantén un tono profesional, objetivo y ejecutivo.
+3. Menciona el sentimiento general de los comentarios si es relevante.
+4. Si los comentarios no responden la pregunta, indica que no hay suficiente información.
+<|im_end|>
 <|im_start|>user
-CONTEXTO (Comentarios reales de YouTube):
+CONTEXTO (Comentarios reales recuperados):
 {context}
 
 PREGUNTA: {question}
-Analiza los comentarios y responde la pregunta.<|im_end|>
+
+Redacta un resumen analítico basado ÚNICAMENTE en el contexto proporcionado.<|im_end|>
 <|im_start|>assistant
 """
             try:
                 out = self.generator(
                     prompt, 
-                    max_new_tokens=250, 
-                    temperature=0.3,
+                    max_new_tokens=300, 
+                    temperature=0.2, # Baja temperatura para que sea más determinista y conciso
+                    top_p=0.9,
+                    repetition_penalty=1.1, # Penalizar repeticiones, común en modelos de 0.5B
                     return_full_text=False,
                     do_sample=True
                 )
                 answer = out[0]['generated_text'].strip()
+                
+                # Asegurar un encabezado visualmente agradable si el modelo no lo incluyó
+                if not answer.startswith("#") and not answer.startswith("**"):
+                    answer = f"### 💡 Análisis Ejecutivo\n\n{answer}"
+                    
             except Exception as e:
                 answer = f"⚠️ Ocurrió un error en la generación de IA: {e}\n\n"
                 answer += "Retrocediendo a Modo Rústico...\n\n"

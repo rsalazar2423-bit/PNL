@@ -105,28 +105,49 @@ def apply_corporate_layout(fig: go.Figure, title: str) -> go.Figure:
 # ─────────────────────────────────────────────────────────────
 
 def get_gradio_theme():
-    """Retorna el tema Dark Premium para la interfaz Gradio."""
+    """Retorna el tema Dark Premium para la interfaz Gradio con alto contraste."""
     return gr.themes.Base(
         primary_hue=gr.themes.colors.blue,
         secondary_hue=gr.themes.colors.slate,
         neutral_hue=gr.themes.colors.slate,
         font=gr.themes.GoogleFont("Inter"),
     ).set(
+        # Variables de Estilo Estándar (Modo Claro/Fallback)
         body_background_fill=CORP_BG,
-        body_text_color="#CBD5E1",
-        block_background_fill="#111827",
-        block_border_color="#1E293B",
-        block_label_text_color="#94A3B8",
-        block_title_text_color="#F8FAFC",
-        input_background_fill="#1E293B",
+        body_text_color="#F1F5F9",        # Slate 100
+        block_background_fill="#111827",  # Slate 900
+        block_border_color="#1E293B",      # Slate 800
+        block_label_text_color="#E2E8F0",  # Slate 200
+        block_title_text_color="#F8FAFC",  # Slate 50
+        input_background_fill="#1E293B",  # Slate 800
         button_primary_background_fill="#2563EB",
         button_secondary_background_fill="#1E293B",
+        panel_background_fill="#0F172A",  # Slate 900
+        color_accent_soft="#1E293B",      # Slate 800 para burbujas de usuario
+        background_fill_secondary="#111827", # Slate 900 para burbujas bot
+        border_color_primary="#334155",   # Slate 700
+        
+        # Variables de Estilo Estándar (Modo Oscuro Oficial)
+        body_background_fill_dark=CORP_BG,
+        body_text_color_dark="#F1F5F9",
+        block_background_fill_dark="#111827",
+        block_border_color_dark="#1E293B",
+        block_label_text_color_dark="#E2E8F0",
+        block_title_text_color_dark="#F8FAFC",
+        input_background_fill_dark="#1E293B",
+        button_primary_background_fill_dark="#2563EB",
+        button_secondary_background_fill_dark="#1E293B",
+        panel_background_fill_dark="#0F172A",
+        color_accent_soft_dark="#1E293B",
+        background_fill_secondary_dark="#111827",
+        border_color_primary_dark="#334155",
     )
 
 def get_dark_mode_js():
-    """Retorna el script JS para forzar el modo oscuro en el navegador."""
+    """Retorna el script JS para forzar el modo oscuro en el navegador al cargar la página."""
     return """
-    function force_dark_mode() {
+    () => {
+        document.documentElement.classList.add('dark');
         document.body.classList.add('dark');
     }
     """
