@@ -49,24 +49,80 @@ El motor de la aplicación ejecuta secuencialmente:
 
 ## 💻 Instalación y Uso (Entorno Local)
 
-Este proyecto está optimizado con **UV**, el gestor de paquetes ultrarrápido en Rust, para garantizar instalaciones deterministas.
+### 📋 Prerrequisitos de Sistema
+Para ejecutar este proyecto de forma local, asegúrate de tener instalado en tu máquina:
+* **Python**: Versión `3.10` o superior (probado hasta la versión `3.14`).
+* **Git**: Para el control de versiones y clonado.
+* **Archivo de Datos**: El archivo `comentarios_oviedo_full.csv` (1.3 MB) debe estar ubicado en la raíz del proyecto.
+
+---
+
+### Opción A: Instalación con UV (Recomendado — Ultra Rápido)
+[**UV**](https://github.com/astral-sh/uv) es un gestor de paquetes de Python escrito en Rust que descarga e instala dependencias hasta 100 veces más rápido que pip.
+
+#### 1. Instalar `uv` en tu sistema:
+* **macOS / Linux**:
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+* **Windows (PowerShell)**:
+  ```powershell
+  irm https://astral.sh/uv/install.ps1 | iex
+  ```
+* **Fallback (vía pip)**:
+  ```bash
+  pip install uv
+  ```
+
+#### 2. Clonar y configurar el proyecto:
+```bash
+# Clonar repositorio
+git clone https://github.com/rsalazar2423-bit/PNL.git
+cd PNL
+
+# Crear venv y sincronizar todas las dependencias de pyproject.toml
+uv sync
+
+# Descargar modelo de lenguaje en español para spaCy
+uv run python -m spacy download es_core_news_sm
+
+# Iniciar la aplicación web
+uv run python main.py
+```
+
+---
+
+### Opción B: Instalación Tradicional (vía `pip` estándar)
+Si no deseas instalar `uv`, puedes utilizar el flujo tradicional de Python:
 
 ```bash
 # 1. Clonar el repositorio
 git clone https://github.com/rsalazar2423-bit/PNL.git
 cd PNL
 
-# 2. Sincronizar dependencias a la velocidad de la luz
-uv sync
+# 2. Crear un entorno virtual
+python -m venv .venv
 
-# 3. Instalar el modelo de lenguaje base de SpaCy
-uv run python -m spacy download es_core_news_sm
+# 3. Activar el entorno virtual
+# En Linux/macOS:
+source .venv/bin/activate
+# En Windows (CMD):
+.venv\Scripts\activate.bat
+# En Windows (PowerShell):
+.venv\Scripts\Activate.ps1
 
-# 4. Lanzar la aplicación web
-uv run python main.py
+# 4. Actualizar pip e instalar dependencias
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 5. Descargar modelo de lenguaje en español para spaCy
+python -m spacy download es_core_news_sm
+
+# 6. Lanzar la aplicación web
+python main.py
 ```
 
-La interfaz gráfica estará disponible instantáneamente en `http://127.0.0.1:7860`.
+La interfaz gráfica estará disponible de inmediato en tu navegador en `http://localhost:7860`.
 
 ---
 *Diseñado con un enfoque obsesivo en el alto rendimiento local y código limpio.*

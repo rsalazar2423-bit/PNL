@@ -10,16 +10,19 @@ numpy>=1.24
 # --- NLP ---
 spacy>=3.7
 nltk>=3.8
+es-core-news-sm @ https://github.com/explosion/spacy-models/releases/download/es_core_news_sm-3.8.0/es_core_news_sm-3.8.0-py3-none-any.whl
 
 # --- Sentiment Analysis ---
 pysentimiento>=0.7
 
 # --- Text Vectorization & Topic Modeling ---
 scikit-learn>=1.3
+sentence-transformers>=2.2.0
 
-# --- RAG ---
+# --- RAG & Analytics DB ---
 rank-bm25>=0.2           # Búsqueda léxica rápida
 accelerate>=0.26         # Para correr LLMs nativos en la GPU de Colab
+duckdb>=1.0.0            # Motor analítico rápido en disco
 
 # --- Visualization ---
 plotly>=5.18
