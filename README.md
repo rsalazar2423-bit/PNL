@@ -27,9 +27,10 @@ El código respeta estrictamente el **Principio de Responsabilidad Única (SRP)*
 
 Para entender el diseño a fondo, por favor revisa la documentación oficial:
 
+* 📄 [**Guía de Ingeniería y Registro de Auditoría**](DOCUMENTATION.md): Documentación exhaustiva del proyecto con detalles de arquitectura, mapeo de stack, políticas de manejo de errores y bugs corregidos en producción.
 * 📄 [**Arquitectura del Sistema**](docs/ARCHITECTURE.md): Diagrama mental del flujo de datos 3-tier y la gestión de memoria RAM.
 * 📄 [**Análisis Técnico Senior**](docs/ANALISIS_TECNICO_SENIOR.md): Una revisión crítica de los cuellos de botella algorítmicos, fortalezas matemáticas y la complejidad del clustering en alta dimensión.
-* 🛠️ [**Tech Stack Detallado**](docs/TECH_STACK.md): Explicación del Qué, el Cómo y el Por qué de cada librería utilizada (Pysentimiento, Sentence-Transformers, DuckDB, Scikit-Learn, Rank-BM25).
+* 📄 [**Tech Stack Detallado**](docs/TECH_STACK.md): Explicación del Qué, el Cómo y el Por qué de cada librería utilizada (Pysentimiento, Sentence-Transformers, DuckDB, Scikit-Learn, Rank-BM25).
 
 ---
 
