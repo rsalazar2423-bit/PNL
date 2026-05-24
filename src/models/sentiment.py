@@ -17,6 +17,8 @@ Principios aplicados:
 from typing import List, Dict, Any
 import pandas as pd
 from tqdm import tqdm
+import os
+import torch
 from pysentimiento import create_analyzer
 
 def _get_analyzer(task: str):
@@ -29,7 +31,14 @@ def _get_analyzer(task: str):
     Returns:
         Analyzer: Instancia del analizador configurada para español.
     """
-    return create_analyzer(task=task, lang="es")
+    device = 0 if torch.cuda.is_available() else -1
+    if device == -1:
+        cores_fisicos = max(1, os.cpu_count() // 2) if os.cpu_count() else 1
+        torch.set_num_threads(cores_fisicos)
+        print(f"   [SENTIMIENTO] Ajustados hilos de PyTorch a núcleos físicos: {cores_fisicos}")
+    print(f"   [SENTIMIENTO] Inicializando analizador '{task}' en dispositivo: {'GPU (0)' if device == 0 else 'CPU (-1)'}")
+    return create_analyzer(task=task, lang="es", device=device)
+
 
 def _run_batch_prediction(analyzer, texts: List[str], batch_size: int) -> List[Any]:
     """
@@ -74,6 +83,13 @@ def predict_polarity(texts: List[str], batch_size: int = 64, progress=None) -> L
     else:
         raw_results = _run_batch_prediction(analyzer, texts, batch_size)
     
+    # Liberar modelo de la memoria RAM/VRAM inmediatamente
+    del analyzer
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return [
         {"label": res.output, "score": res.probas[res.output]} 
         for res in raw_results
@@ -95,6 +111,13 @@ def predict_emotions(texts: List[str], batch_size: int = 64, progress=None) -> L
     else:
         raw_results = _run_batch_prediction(analyzer, texts, batch_size)
     
+    # Liberar modelo de la memoria RAM/VRAM inmediatamente
+    del analyzer
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     return [
         {"label": res.output, "score": res.probas[res.output]} 
         for res in raw_results

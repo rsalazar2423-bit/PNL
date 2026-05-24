@@ -48,8 +48,9 @@ def extract_entities(df: pd.DataFrame, batch_size: int = 500) -> dict:
         nlp = spacy.load("es_core_news_sm", disable=["parser"])
     except OSError:
         import subprocess
+        import sys
         print("   [NER/POS] Modelo no encontrado. Descargando modelo desde spaCy...")
-        subprocess.run(["python", "-m", "spacy", "download", "es_core_news_sm"])
+        subprocess.run([sys.executable, "-m", "spacy", "download", "es_core_news_sm"])
         nlp = spacy.load("es_core_news_sm", disable=["parser"])
 
     texts = df['text_clean'].tolist()

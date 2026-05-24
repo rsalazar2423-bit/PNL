@@ -2,45 +2,35 @@
 ============================================================
 Módulo: models/clustering.py
 ============================================================
-Agrupamiento semántico no supervisado mediante Embeddings.
+Agrupamiento semántico no supervisado mediante K-Means.
 
-Este módulo identifica temas latentes en el corpus agrupando los 
-vectores semánticos generados en la Fase 2. Utiliza K-Means para 
-la segmentación y t-SNE para la visualización 3D.
-
-Principios aplicados:
-    - SRP: Funciones separadas para reducción, búsqueda de K y clustering.
-    - Precisión Semántica: Uso de centroides para etiquetado.
-    - Documentación: Google Style docstrings.
+Responsabilidad Única:
+    Ejecutar el modelado K-Means (K óptimo, ajuste y asignación).
+    Delega visualización (t-SNE) y validación (métricas) a otros módulos.
 """
 
 from typing import Tuple, List, Dict, Any
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
-from sklearn.manifold import TSNE
+
+from src.models.projection import project_embeddings_tsne, get_stratified_sample_indices
+from src.models.metrics import evaluate_clustering_metrics
+
 
 def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> Tuple[int, List[Tuple[int, float]]]:
     """
     Determina el número óptimo de clusters usando Silhouette Score.
-
-    Args:
-        embeddings (np.ndarray): Matriz de vectores semánticos.
-        k_range (range): Rango de valores K a evaluar.
-
-    Returns:
-        int: El mejor valor de K encontrado.
     """
+    from sklearn.metrics import silhouette_score
+    
     print(f"   [CLUSTERING] Buscando K óptimo en rango {list(k_range)}...")
     best_k = 3
     max_score = -1
     silhouette_scores = []
     
-    # Muestreo para velocidad en el cálculo de silueta
     sample_size = min(2000, embeddings.shape[0])
     indices = np.random.choice(embeddings.shape[0], sample_size, replace=False)
-    sample_data = embeddings[indices]
 
     for k in k_range:
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
@@ -55,92 +45,83 @@ def _get_optimal_k(embeddings: np.ndarray, k_range: range = range(3, 9)) -> Tupl
             
     return best_k, silhouette_scores
 
-def _apply_tsne_3d(embeddings: np.ndarray, sample_indices: List[int]) -> np.ndarray:
-    """
-    Reduce la dimensionalidad de los embeddings a 3D para visualización.
 
-    Args:
-        embeddings (np.ndarray): Matriz completa de vectores.
-        sample_indices (List[int]): Índices de la muestra a reducir.
-
-    Returns:
-        np.ndarray: Coordenadas (N_sample, 3).
+def _fit_kmeans(embeddings: np.ndarray, k: int) -> KMeans:
     """
-    print(f"   [CLUSTERING] Calculando proyección t-SNE 3D para {len(sample_indices)} puntos...")
-    tsne = TSNE(
-        n_components=3, 
-        perplexity=min(30, len(sample_indices) - 1), 
-        random_state=42, 
-        init='pca', 
-        learning_rate='auto'
-    )
-    return tsne.fit_transform(embeddings[sample_indices])
+    Entrena el modelo KMeans con el número de clústeres indicado.
+    """
+    print(f"   [CLUSTERING] Ejecutando K-Means con K={k}...")
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans.fit(embeddings)
+    return kmeans
+
 
 def _get_cluster_labels(df: pd.DataFrame, kmeans: KMeans, embeddings: np.ndarray) -> Dict[int, str]:
     """
-    Genera etiquetas descriptivas para cada clúster basándose en el 
-    comentario más representativo (más cercano al centroide).
-
-    Args:
-        df (pd.DataFrame): Dataset con los textos originales.
-        kmeans (KMeans): Modelo entrenado.
-        embeddings (np.ndarray): Vectores utilizados.
-
-    Returns:
-        Dict: Mapa de {cluster_id: etiqueta_descriptiva}.
+    Genera etiquetas descriptivas basadas en el comentario representativo (centroide).
     """
     labels = {}
     for i, centroid in enumerate(kmeans.cluster_centers_):
-        # Encontrar el índice del punto más cercano al centroide
         distances = np.linalg.norm(embeddings - centroid, axis=1)
         closest_idx = np.argmin(distances)
         representative_text = df.iloc[closest_idx]['text_clean'][:50] + "..."
         labels[i] = f"Tema {i+1}: {representative_text}"
     return labels
 
+
+def _run_final_evaluation(
+    df: pd.DataFrame, 
+    embeddings: np.ndarray, 
+    kmeans: KMeans, 
+    best_k: int, 
+    sil_scores: List[Tuple[int, float]]
+) -> Dict[str, Any]:
+    """
+    Orquesta el cálculo de proyecciones visuales t-SNE y métricas estadísticas.
+    """
+    # 1. Obtener etiquetas descriptivas y muestras
+    cluster_labels = _get_cluster_labels(df, kmeans, embeddings)
+    sample_indices = get_stratified_sample_indices(df, best_k)
+    coords_3d = project_embeddings_tsne(embeddings, sample_indices)
+
+    # 2. Calcular métricas finales
+    print("   [CLUSTERING] Calculando métricas de evaluación final...")
+    n_total = len(df)
+    eval_sample_size = min(2000, n_total)
+    eval_indices = np.random.RandomState(42).choice(n_total, eval_sample_size, replace=False)
+    metrics = evaluate_clustering_metrics(embeddings[eval_indices], df.loc[eval_indices, 'cluster'].values)
+
+    print(f"      - Final Silhouette Score: {metrics['silhouette']:.4f}")
+    print(f"      - Final Davies-Bouldin Index: {metrics['davies_bouldin']:.4f}")
+    print(f"      - Final Calinski-Harabasz Index: {metrics['calinski_harabasz']:.4f}")
+
+    return {
+        'best_k': best_k,
+        'cluster_labels': cluster_labels,
+        'tsne_3d_coords': coords_3d,
+        'tsne_sample_idx': sample_indices,
+        'silhouette_scores': sil_scores,
+        'metrics': metrics
+    }
+
+
 def compute_clusters(df: pd.DataFrame, embeddings: np.ndarray) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Orquestador del pipeline de clustering semántico.
-
-    Args:
-        df (pd.DataFrame): Dataset preprocesado.
-        embeddings (np.ndarray): Matriz de vectores generada en Fase 2.
-
-    Returns:
-        Tuple[pd.DataFrame, Dict]: DataFrame con clúster y metadata para gráficos.
     """
     print("\n" + "=" * 60)
     print("🧩 PASO 6: Agrupamiento Semántico (Clustering)")
     print("=" * 60)
 
-    # 1. Encontrar K óptimo
+    # 1. Encontrar K óptimo (Delegado)
     best_k, sil_scores = _get_optimal_k(embeddings)
 
-    # 2. Ejecutar K-Means final
-    print(f"   [CLUSTERING] Ejecutando K-Means con K={best_k}...")
-    kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
-    df['cluster'] = kmeans.fit_predict(embeddings)
+    # 2. Ejecutar K-Means final (Delegado)
+    kmeans = _fit_kmeans(embeddings, best_k)
+    df['cluster'] = kmeans.labels_
 
-    # 3. Obtener etiquetas descriptivas
-    cluster_labels = _get_cluster_labels(df, kmeans, embeddings)
-
-    # 4. Muestreo estratificado para t-SNE (por eficiencia visual)
-    n_total = len(df)
-    n_sample = min(800, n_total)
-    sample_indices = df.groupby('cluster').apply(
-        lambda x: x.sample(min(len(x), n_sample // best_k))
-    ).index.get_level_values(1).tolist()
-    sample_indices = sorted(sample_indices)
-
-    # 5. Reducción dimensional
-    coords_3d = _apply_tsne_3d(embeddings, sample_indices)
+    # 3. Generar proyecciones y validaciones (Delegado)
+    results = _run_final_evaluation(df, embeddings, kmeans, best_k, sil_scores)
 
     print("✅ [CLUSTERING] Segmentación semántica finalizada.")
-    
-    return df, {
-        'best_k': best_k,
-        'cluster_labels': cluster_labels,
-        'tsne_3d_coords': coords_3d,
-        'tsne_sample_idx': sample_indices,
-        'silhouette_scores': sil_scores
-    }
+    return df, results

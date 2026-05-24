@@ -43,8 +43,8 @@ def create_tsne_3d_chart(df: pd.DataFrame, tsne_coords, sample_idx: list, cluste
     
     tsne_df = pd.DataFrame({
         'X': tsne_coords[:, 0], 'Y': tsne_coords[:, 1], 'Z': tsne_coords[:, 2],
-        'cluster': [cluster_labels.get(df.iloc[i]['cluster'], f"Tema {df.iloc[i]['cluster']}") for i in sample_idx],
-        'text': [df.iloc[i]['text_clean'][:100] for i in sample_idx]
+        'cluster': [cluster_labels.get(df.loc[i]['cluster'], f"Tema {df.loc[i]['cluster']}") for i in sample_idx],
+        'text': [df.loc[i]['text_clean'][:100] for i in sample_idx]
     })
 
     fig = px.scatter_3d(
@@ -69,7 +69,7 @@ def create_cluster_sizes_chart(df: pd.DataFrame, cluster_labels: dict) -> go.Fig
     Genera barras con la distribución de tamaño por cluster.
     """
     sizes = df['cluster'].value_counts().sort_index()
-    labels = [cluster_labels.get(i, f"Tema {i}")[:40] + "..." for i in sizes.index]
+    labels = [f"Tema {i+1}" for i in sizes.index]
 
     fig = go.Figure(data=[go.Bar(
         x=labels, y=sizes.values,
@@ -78,7 +78,6 @@ def create_cluster_sizes_chart(df: pd.DataFrame, cluster_labels: dict) -> go.Fig
         text=sizes.values, textposition='auto'
     )])
     fig = apply_corporate_layout(fig, "Distribución de Temas Detectados")
-    fig.update_layout(xaxis_tickangle=-45)
     return fig
 
 def create_sunburst_360(df: pd.DataFrame, cluster_labels: dict) -> go.Figure:

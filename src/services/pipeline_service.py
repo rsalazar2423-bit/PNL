@@ -2,23 +2,25 @@
 ============================================================
 Módulo: services/pipeline_service.py
 ============================================================
-Servicio central de orquestación del pipeline NLP.
+Servicio central de orquestación del pipeline NLP (Orquestador).
 
-RESPONSABILIDAD: Solo procesa datos e IA. No sabe nada de gráficos.
+Responsabilidad Única:
+    Coordinar secuencialmente la ejecución de las etapas de NLP.
 """
 
 import gc
-import joblib
-import pandas as pd
+import os
+from src.services.pipeline_cache_repository import PipelineCacheRepository
+from src.services.stages import (
+    CleaningStage,
+    TFIDFStage,
+    NERStage,
+    SentimentStage,
+    EmbeddingsStage,
+    ClusteringStage,
+    RAGStage
+)
 
-# Importaciones de Modelos (Lógica de Negocio)
-from src.models.preprocessing import load_and_clean_data
-from src.models.tfidf import compute_tfidf
-from src.models.ner import extract_entities
-from src.models.sentiment import predict_sentiment
-from src.models.clustering import compute_clusters
-from src.models.embeddings import compute_embeddings
-from src.models.rag import RAGSystem
 
 class NLPWorkflowService:
     """
@@ -27,57 +29,87 @@ class NLPWorkflowService:
 
     def __init__(self, data_path: str = "comentarios_oviedo_full.csv"):
         self.data_path = data_path
-        self.results_file = "pipeline_results_data.pkl" # Guardamos datos crudos
+        self.repository = PipelineCacheRepository(data_path)
 
-    def run_full_analysis(self, progress_callback=None) -> dict:
+    def run_stage_by_stage(self, progress=None):
         """
-        Ejecuta el procesamiento de IA y retorna datos enriquecidos.
+        Ejecuta el pipeline fase por fase, yield status y datos intermedios.
+        
+        Yields:
+            tuple: (mensaje_estado, es_exito, models_data)
         """
-        def report(val, desc):
-            if progress_callback:
-                progress_callback(val, desc=desc)
-            print(f"\n>>> {desc}")
+        # 1. Comprobar e invalidar caché si el CSV original cambió
+        if self.repository.invalidate_cache_if_stale():
+            yield "🔄 Archivo original modificado detectado. Re-procesando dataset...", False, None
 
-        # 1. Carga y Limpieza
-        report(0.10, "Fase 1: Carga y Limpieza de Datos...")
-        df = load_and_clean_data(self.data_path, progress_callback=progress_callback)
+        # 2. Bypass / Caché directo
+        if self.repository.has_valid_cache():
+            yield "⚡ Caché detectado. Saltando procesamiento ML (Carga instantánea)...", True, None
+            return
+
+        context = {
+            'data_path': self.data_path,
+            'repository': self.repository,
+            'df': None,
+            'tfidf_data': None,
+            'ner_pos_data': None,
+            'embeddings': None,
+            'cluster_results': None,
+            'rag': None
+        }
+
+        # 3. Cargar checkpoints si existen para saltar etapas
+        start_stage_idx = 0
         
-        # 2. TF-IDF
-        report(0.25, "Fase 2: Extracción de Características (TF-IDF)...")
-        tfidf_data = compute_tfidf(df)
+        if os.path.exists("pipeline_checkpoint_stage4.pkl"):
+            yield "⚡ Checkpoint de sentimientos detectado. Cargando datos previos...", False, None
+            df, tfidf_data, ner_pos_data = self.repository.load_checkpoint_stage4()
+            if df is not None:
+                context['df'] = df
+                context['tfidf_data'] = tfidf_data
+                context['ner_pos_data'] = ner_pos_data
+                start_stage_idx = 4  # Salta a la etapa 5 (índice 4: EmbeddingsStage)
+
+        if os.path.exists("pipeline_checkpoint_stage5.pkl"):
+            yield "⚡ Checkpoint de embeddings detectado. Cargando vectores semánticos...", False, None
+            embeddings = self.repository.load_checkpoint_stage5()
+            if embeddings is not None:
+                context['embeddings'] = embeddings
+                if start_stage_idx == 4:
+                    start_stage_idx = 5  # Salta a la etapa 6 (índice 5: ClusteringStage)
+
+        # 4. Ejecutar las etapas del pipeline de forma iterativa (Patrón Command)
+        stages = [
+            CleaningStage(),
+            TFIDFStage(),
+            NERStage(),
+            SentimentStage(),
+            EmbeddingsStage(),
+            ClusteringStage(),
+            RAGStage()
+        ]
+
+        for i in range(start_stage_idx, len(stages)):
+            stage = stages[i]
+            yield stage.description, False, None
+            context = stage.run(context, progress=progress)
+
+        # 5. Guardar resultados finales
+        yield "💾 Guardando resultados (Parquet + Modelos)...", False, None
+        self.repository.save_final_results(
+            context['df'], 
+            context['tfidf_data'], 
+            context['ner_pos_data'], 
+            context['cluster_results'], 
+            context['rag']
+        )
         
-        # 3. NER (Entidades)
-        report(0.40, "Fase 3: Extracción de Entidades y POS...")
-        ner_pos_data = extract_entities(df)
-        
-        # 4. Sentimiento y Emociones
-        report(0.60, "Fase 4: Inteligencia Emocional (RoBERTa)...")
-        df = predict_sentiment(df, progress=progress_callback)
-        
-        # 5. Motor Semántico (Embeddings)
-        report(0.75, "Fase 5: Generando Motor Semántico (Embeddings)...")
-        embeddings = compute_embeddings(df['text_clean'].tolist(), progress=progress_callback)
-        
-        # 6. Clustering Semántico
-        report(0.85, "Fase 6: Segmentación Temática (Clustering)...")
-        df, cluster_results = compute_clusters(df, embeddings)
-        
-        # 7. RAG (Asistente)
-        report(0.95, "Fase 7: Indexando Asistente Cognitivo (RAG)...")
-        rag_system = RAGSystem(df)
-        
-        # Empaquetado final de DATOS (sin gráficos)
-        raw_results = {
-            'df': df,
-            'tfidf': tfidf_data,
-            'ner_pos': ner_pos_data,
-            'cluster_results': cluster_results,
-            'rag': rag_system
+        models_data = {
+            'tfidf': context['tfidf_data'], 
+            'ner_pos': context['ner_pos_data'],
+            'cluster_results': context['cluster_results'], 
+            'rag': context['rag']
         }
         
-        # Persistencia de datos crudos
-        joblib.dump(raw_results, self.results_file)
-        
         gc.collect()
-        report(1.0, "✅ Procesamiento de datos finalizado.")
-        return raw_results
+        yield "✅ Procesamiento finalizado con éxito.", True, models_data
