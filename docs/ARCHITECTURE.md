@@ -42,6 +42,8 @@ Para permitir que la aplicación escale a millones de comentarios sin consumir g
 - **Agregaciones SQL**: Los módulos de visualización (`eda_charts` y `sentiment_charts`) consultan el archivo Parquet directamente desde el disco duro en lugar de cargar el DataFrame completo a memoria. Solo los resultados agrupados y reducidos se transfieren a Plotly.
 
 ## 🔋 Eficiencia de Recursos y Estado de la UI
+- **Persistencia Segregada**: Los datos analíticos se almacenan en `pipeline_data.parquet` mientras que los serializadores y el modelo RAG se almacenan en `pipeline_models.pkl` para evitar sobrecargas de E/S.
+- **Caché de UI Pre-renderizada**: La interfaz completa de Gradio se almacena en `pipeline_ui_cache.pkl` una vez generada, lo que reduce las recargas posteriores de la página a menos de 0.1 segundos.
 - **Lazy Loading**: Los modelos de IA se cargan de forma perezosa y sus recursos son liberados a través del recolector de basura (`gc.collect()`) después de cada fase del pipeline.
 - **Evitación de Serialización Client-Side**: Para prevenir la caída de la UI ("pantalla negra"), el objeto pesado del motor de búsqueda (`RAGSystem`) se mantiene en el backend mediante un estado global de Python (`GLOBAL_RAG_SYSTEM`), en lugar de serializarse a través del navegador web usando `gr.State`.
 - **Compatibilidad UI**: Los contenedores y layouts se configuran de forma permanentemente visible para evitar problemas en el motor de renderizado de Gradio 4 al inicializar gráficos interactivos de Plotly.

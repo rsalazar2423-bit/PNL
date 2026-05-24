@@ -29,7 +29,8 @@ El flujo de datos del proyecto se divide en fases secuenciales que transforman c
 - **Generación**: Sintetiza una respuesta usando el contexto recuperado, citando las fuentes originales y operando en el backend de forma segura para evitar sobrecargas de red.
 
 ### 6. Almacenamiento y Consulta Analítica (`DuckDB`)
-- **Parquet**: Exportación de todos los datos limpios e inferidos a un archivo binario columnar comprimido.
+- **Parquet**: Exportación de todos los datos limpios e inferidos al archivo columnar `pipeline_data.parquet`.
+- **Modelos**: Exportación de modelos de procesamiento (TF-IDF, NER, Clustering y RAG) al archivo `pipeline_models.pkl`.
 - **Agregaciones SQL**: Consultas directas al archivo Parquet para generar dinámicamente los gráficos Plotly de EDA y Sentimiento, evitando la sobrecarga en RAM del servidor web.
 
 ## 📈 Métricas de Calidad
