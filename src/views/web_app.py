@@ -147,11 +147,6 @@ def create_web_app() -> tuple:
                 eval_kpi_1, eval_kpi_2, eval_kpi_3, eval_kpi_4, eval_kpi_5, eval_kpi_6 = eval_kpis
                 plot_sent_conf, plot_emot_conf, plot_correlation = eval_plots
 
-        # ── EVENTOS ──
-        msg.submit(respond, [msg, chatbot, rag_mode], [msg, chatbot])
-        clear.click(lambda: None, None, chatbot, queue=False)
-        btn_export.click(fn=export_data, inputs=[], outputs=btn_export)
-
         outputs = [
             loading_screen, dashboard_screen, loading_status,
             kpi_1, kpi_2, kpi_3, kpi_4, 
@@ -167,5 +162,10 @@ def create_web_app() -> tuple:
             eval_kpi_4, eval_kpi_5, eval_kpi_6,
             plot_sent_conf, plot_emot_conf, plot_correlation
         ]
+
+        # ── EVENTOS ──
+        msg.submit(respond, [msg, chatbot, rag_mode], [msg, chatbot])
+        clear.click(lambda: None, None, chatbot, queue=False)
+        btn_export.click(fn=export_data, inputs=[], outputs=btn_export)
         
     return app, btn_start, outputs

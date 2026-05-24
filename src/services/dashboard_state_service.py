@@ -65,7 +65,7 @@ def get_dashboard_state() -> dict:
     total_comments = len(df)
     unique_authors = df['author'].nunique() if 'author' in df.columns else 0
     total_likes = int(df['likes'].sum()) if 'likes' in df.columns else 0
-    avg_length = float(df['text'].str.len().mean()) if 'text' in df.columns else 0.0
+    avg_length = int(round(df['text'].str.len().mean())) if 'text' in df.columns else 0
     
     # Retornar estructura de datos pura
     return {

@@ -19,6 +19,7 @@ class PipelineCacheRepository:
         self.cache_files = [
             "pipeline_data.parquet", 
             "pipeline_models.pkl", 
+            "pipeline_ui_cache.pkl",
             "pipeline_checkpoint_stage4.pkl", 
             "pipeline_checkpoint_stage5.pkl"
         ]
@@ -124,11 +125,11 @@ class PipelineCacheRepository:
         except Exception as e:
             print(f"   [REPOSITORY] Error al guardar resultados finales: {e}")
 
-        # Limpiar checkpoints temporales
-        for f in ["pipeline_checkpoint_stage4.pkl", "pipeline_checkpoint_stage5.pkl"]:
+        # Limpiar checkpoints temporales y caché de UI
+        for f in ["pipeline_checkpoint_stage4.pkl", "pipeline_checkpoint_stage5.pkl", "pipeline_ui_cache.pkl"]:
             if os.path.exists(f):
                 try:
                     os.remove(f)
-                    print(f"   [REPOSITORY] Eliminado checkpoint temporal {f}.")
+                    print(f"   [REPOSITORY] Eliminado archivo temporal/caché {f}.")
                 except Exception as e:
-                    print(f"   [REPOSITORY] No se pudo eliminar checkpoint {f}: {e}")
+                    print(f"   [REPOSITORY] No se pudo eliminar {f}: {e}")

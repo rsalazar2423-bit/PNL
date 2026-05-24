@@ -44,21 +44,59 @@ def handle_start_pipeline(progress=gr.Progress(track_tqdm=True)):
 
 def load_dashboard_ui():
     """
-    Delegador puro: carga el estado analítico y lo pasa al mapeador visual.
+    Carga el estado del dashboard de forma segura al iniciar la aplicación, usando caché de UI.
     """
+    import os
+    import joblib
+    global GLOBAL_RAG_SYSTEM
+    
+    if not (os.path.exists("pipeline_data.parquet") and os.path.exists("pipeline_models.pkl")):
+        # No hay caché disponible, se queda en la pantalla de carga para iniciar procesamiento
+        return [gr.update(visible=True), gr.update(visible=False), gr.update(value="Esperando inicio de procesamiento...")] + [gr.update()] * 38
+
+    # 1. Intentar cargar desde la caché de la UI pre-renderizada (instantáneo)
+    if os.path.exists("pipeline_ui_cache.pkl"):
+        try:
+            print("   [CONTROLLER] Cargando UI pre-renderizada desde caché instantánea...")
+            ui_outputs = joblib.load("pipeline_ui_cache.pkl")
+            
+            # Re-vincular el RAG global si no está en memoria
+            if GLOBAL_RAG_SYSTEM is None:
+                print("   [CONTROLLER] Restaurando motor RAG para consultas...")
+                models = joblib.load("pipeline_models.pkl")
+                GLOBAL_RAG_SYSTEM = models.get('rag')
+                
+            return ui_outputs
+        except Exception as e:
+            print(f"   [CONTROLLER] Advertencia al cargar caché de UI: {e}. Re-generando...")
+            if os.path.exists("pipeline_ui_cache.pkl"):
+                try:
+                    os.remove("pipeline_ui_cache.pkl")
+                except:
+                    pass
+
+    # 2. Si no hay caché de UI, calcular de forma normal y guardarla
     try:
         print("   [CONTROLLER] Solicitando carga de estado analítico...")
         state = get_dashboard_state()
         
-        global GLOBAL_RAG_SYSTEM
         GLOBAL_RAG_SYSTEM = state['rag']
         
         print("   [CONTROLLER] Traduciendo estado a interfaz gráfica...")
-        return map_state_to_gradio_ui(state)
+        ui_outputs = map_state_to_gradio_ui(state)
+        
+        # Guardar copia pre-renderizada para futuras cargas
+        try:
+            print("   [CONTROLLER] Guardando copia de UI pre-renderizada para carga instantánea...")
+            joblib.dump(ui_outputs, "pipeline_ui_cache.pkl")
+        except Exception as ex:
+            print(f"   [CONTROLLER] Error al guardar caché de la UI: {ex}")
+            
+        return ui_outputs
     except Exception as e:
         print("\n=== ERROR EN EL CONTROLADOR DE UI ===")
         traceback.print_exc()
-        return [gr.update(visible=True)] + [gr.update()] * 40
+        return [gr.update(visible=True), gr.update(visible=False), gr.update(value=f"Error al cargar caché: {str(e)}")] + [gr.update()] * 38
 
 
 def respond(message: str, chat_history: list, r_mode: str):
